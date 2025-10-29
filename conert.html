@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>English → Korean Translator</title>
+    <style>
+        :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.4}
+        body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem;background:#f4f6f8}
+        .card{width:100%;max-width:900px;background:#fff;border-radius:10px;padding:1rem;box-shadow:0 6px 18px rgba(10,20,30,.08)}
+        header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+        textarea{width:100%;min-height:140px;padding:.75rem;border:1px solid #d7dde6;border-radius:8px;font-size:1rem;resize:vertical}
+        .row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+        .controls{display:flex;gap:.5rem;align-items:center;margin-top:.5rem}
+        button{background:#2563eb;color:#fff;border:0;padding:.5rem .75rem;border-radius:8px;cursor:pointer}
+        button.ghost{background:#eef2ff;color:#111;border:1px solid #c7d2fe}
+        .output{min-height:140px;padding:.75rem;border-radius:8px;border:1px solid #d7dde6;background:#fbfdff;white-space:pre-wrap}
+        .small{font-size:.85rem;color:#556677}
+        @media (max-width:720px){.row{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <header>
+            <h2>English → Korean</h2>
+            <div class="small">Type or paste English text and get a Korean translation</div>
+        </header>
+
+        <div class="row">
+            <div>
+                <label class="small">English input</label>
+                <textarea id="input" placeholder="Type English here..."></textarea>
+                <div class="controls">
+                    <button id="translateBtn">Translate</button>
+                    <button id="clearBtn" class="ghost">Clear</button>
+                    <div style="margin-left:auto" class="small" id="status"></div>
+                </div>
+            </div>
+
+            <div>
+                <label class="small">Korean output</label>
+                <div id="output" class="output" aria-live="polite"></div>
+                <div class="controls" style="margin-top:.5rem">
+                    <button id="copyBtn" class="ghost">Copy</button>
+                    <button id="swapBtn" class="ghost">Swap (K→E)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple translator using the unofficial Google translate endpoint.
+        // Note: This is public/unofficial and may be rate-limited. For production use get an official API key.
+        const input = document.getElementById('input');
+        const output = document.getElementById('output');
+        const translateBtn = document.getElementById('translateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const swapBtn = document.getElementById('swapBtn');
+        const status = document.getElementById('status');
+
+        let src = 'en', tgt = 'ko';
+        let debounceTimer = null;
+
+        function setStatus(text='') { status.textContent = text; }
+        function parseGoogleTranslateResponse(data) {
+            // Response is nested arrays: [[["번역","orig",,,],...],...]
+            try {
+                return data[0].map(part => part[0][0]).join('');
+            } catch (e) {
+                return '';
+            }
+        }
+
+        async function translateText(text) {
+            if (!text.trim()) { output.textContent = ''; return; }
+            setStatus('Translating…');
+            const url = 'https://translate.googleapis.com/translate_a/single?client=gtx'
+                + '&sl=' + encodeURIComponent(src)
+                + '&tl=' + encodeURIComponent(tgt)
+                + '&dt=t&q=' + encodeURIComponent(text);
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('Network error');
+                const data = await res.json();
+                const translated = parseGoogleTranslateResponse(data);
+                output.textContent = translated || 'No translation returned.';
+                setStatus('');
+            } catch (err) {
+                setStatus('Error');
+                output.textContent = 'Translation failed. Try again or use an official API.';
+                console.error(err);
+            }
+        }
+
+        // Debounced auto-translate while typing
+        input.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => translateText(input.value), 400);
+        });
+
+        translateBtn.addEventListener('click', () => translateText(input.value));
+        clearBtn.addEventListener('click', () => { input.value=''; output.textContent=''; setStatus(''); });
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(output.textContent || '');
+                setStatus('Copied');
+                setTimeout(()=>setStatus(''),900);
+            } catch { setStatus('Copy failed'); }
+        });
+
+        swapBtn.addEventListener('click', () => {
+            // swap source/target and move output back into input for quick reverse translate
+            [src, tgt] = [tgt, src];
+            input.value = output.textContent || input.value;
+            output.textContent = '';
+            translateText(input.value);
+        });
+
+        // optional: translate small sample on load
+        // input.value = 'Hello, how are you?';
+        // translateText(input.value);
+    </script>
+</body>
+</html>>
